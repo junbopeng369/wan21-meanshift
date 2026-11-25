@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Mean-Shift vs. DMD FakeScore on Wan2.1-1.3B Video Distillation</title>
+<style>
+  :root {
+    --bg: #0b1020; --surface: #11182c; --surface2: #0f1629; --border: #233154;
+    --text: #e2e8f0; --muted: #94a3bf; --accent: #2dd4a0; --blue: #5aa9ff;
+    --yellow: #ffd166; --red: #f87171; --orange: #f59e42; --purple: #c4b5fd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px 64px; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1220px; margin: 0 auto; }
+  h1 { margin: 0 0 8px; font-size: 28px; color: #fff; letter-spacing: -0.01em; }
+  .subtitle { color: var(--muted); font-size: 14.5px; margin-bottom: 20px; }
+  h2 {
+    margin: 36px 0 14px; font-size: 19px; color: #fff;
+    border-left: 3px solid var(--accent); padding-left: 12px;
+  }
+  h3 { margin: 22px 0 10px; font-size: 15.5px; color: #cbd5e1; }
+  p { margin: 0 0 12px; font-size: 14.5px; color: #cbd5e1; }
+  code {
+    background: #16203a; color: #93c5fd; padding: 1px 6px; border-radius: 5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em;
+  }
+  .callout {
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 4px solid var(--accent); border-radius: 10px;
+    padding: 14px 18px; margin: 16px 0 24px; font-size: 14px;
+  }
+  .callout.warn { border-left-color: var(--orange); }
+  .bar { display: flex; gap: 10px; flex-wrap: wrap; margin: 14px 0 18px; align-items: center; }
+  button {
+    background: #1a2540; color: #e2e8f0; border: 1px solid #2e4068;
+    padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  button:hover { background: #25355a; }
+  button.primary { background: #145343; border-color: var(--accent); color: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px;
+  }
+  .card.pass { border-color: rgba(45, 212, 160, 0.65); }
+  .card.fail { border-color: rgba(248, 113, 113, 0.45); }
+  .card.warn { border-color: rgba(245, 158, 66, 0.55); }
+  .tag {
+    display: inline-block; padding: 2px 9px; border-radius: 99px;
+    font-size: 11px; font-weight: 700; margin-bottom: 8px;
+  }
+  .tag.pass { background: rgba(45, 212, 160, 0.16); color: var(--accent); }
+  .tag.fail { background: rgba(248, 113, 113, 0.16); color: var(--red); }
+  .tag.warn { background: rgba(245, 158, 66, 0.18); color: #fdba74; }
+  .tag.info { background: rgba(90, 169, 255, 0.16); color: #93c5fd; }
+  .title { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 6px; }
+  .desc { font-size: 12.8px; color: var(--muted); margin-bottom: 10px; line-height: 1.5; }
+  .metrics {
+    font-size: 11.5px; color: #cbd5e1; background: #090f1f; border: 1px solid #1e2c4a;
+    border-radius: 6px; padding: 6px 10px; margin-bottom: 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  video { width: 100%; border-radius: 8px; background: #000; display: block; }
+  .fig {
+    width: 100%; border-radius: 10px; border: 1px solid var(--border);
+    display: block; margin: 10px 0 6px;
+  }
+  .cap { font-size: 12.5px; color: var(--muted); margin-bottom: 18px; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0 20px;
+    background: var(--surface); border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--border); font-size: 13px;
+  }
+  th, td { padding: 10px 12px; border-bottom: 1px solid #1e2c4a; text-align: left; }
+  th { background: #141e36; color: #cbd5e1; font-weight: 700; }
+  tr:last-child td { border-bottom: none; }
+  .num { text-align: right; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Can Batch Mean-Shift Replace DMD's FakeScore in Video Distillation?</h1>
+  <div class="subtitle">Empirical study on 4-step <code>Wan2.1-T2V-1.3B</code> distilled from <code>Wan2.1-T2V-14B</code> (CFG = 3.0) · Updated Nov 25, 2026</div>
+
+  <div class="callout">
+    <strong>Executive Summary:</strong> We evaluated replacing Distribution Matching Distillation's (DMD) auxiliary FakeScore network with kernel Mean-Shift / Drifting repulsion on open-domain text-to-video (<code>Wan2.1-1.3B</code>).
+    (1) Our no-training ESS diagnostic proved raw 2.1M-dim video latents collapse due to measure concentration (<code>CV(d) = 0.0006</code> at <em>t</em> = 0.9), whereas <strong>frozen Teacher intermediate hidden states</strong> retain 470× stronger discrimination (<code>CV(d) = 0.28–0.32</code>, healthy <code>ESS = 48%</code> at <em>N</em> = 16).
+    (2) However, across four Mean-Shift formulations (<code>Core v1–v4</code>) plus a zero-training Monte-Carlo FakeScore diagnostic, <strong>every FakeScore-free DMD half-replacement collapsed</strong>, while standard DMD stayed sharp and stable through 400 generator updates.
+    (3) <strong>Root cause:</strong> <code>D_real(x_t)</code> is a spatially aligned posterior mean conditioned on <em>x<sub>t</sub></em>, while a cross-video batch average <code>x0_ms</code> mixes clean videos with different spatial layouts — so their difference does not vanish even when <em>q = p</em>. Next step: pivot to symmetric sample-vs-sample <strong>Video Teacher-Feature Drifting (Video-TFD)</strong>.
+  </div>
+
+  <h2>1. Synchronized Video Comparison (400 Generator Updates, 4 Identical Prompts)</h2>
+  <p>All models start from the identical Hybrid-Forcing <code>Wan2.1-1.3B</code> checkpoint, use the same frozen <code>Wan2.1-14B</code> Teacher (CFG = 3.0, LR = 2e-6), and are evaluated on the exact same 4 validation prompts (toy soldiers, keyboard, classroom students, woman on phone).</p>
+
+  <div class="bar">
+    <button class="primary" onclick="syncAll(1.0)">Restart All (1.0x)</button>
+    <button onclick="syncAll(0.5)">Slow-Mo (0.5x)</button>
+    <button onclick="toggleAll()">Play / Pause All</button>
+  </div>
+
+  <div class="grid">
+    <div class="card pass">
+      <span class="tag pass">ONLY HEALTHY RUN · 400 GEN UPDATES (ITER 2000)</span>
+      <div class="title">Baseline: Standard 4-Step DMD (14B Teacher + 1.3B FakeScore, 5:1)</div>
+      <div class="metrics">iter 2000 (400 gen updates) | vsd_loss median = 0.33 | sharp, natural, prompt-faithful</div>
+      <div class="desc">Improves monotonically from 50 to 400 generator updates with zero oversaturation or mode collapse across all 4 prompts.</div>
+      <video class="v" src="assets/p1-dmd-baseline-b300_iter_002000.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+
+    <div class="card fail">
+      <span class="tag fail">COLLAPSED · ZERO FAKESCORE · 400 GEN UPDATES</span>
+      <div class="title">Core v4: Decoupled CFG + Uncond-Anchored Mean-Shift (N = 16)</div>
+      <div class="metrics">d = cfg_dir + 0.5 · σ_t · cap(ms_x0 − uncond_x0) | Collapsed to olive/pink blobs by iter 150–400</div>
+      <div class="desc">Despite σ_t gating and real-prior anchoring, subtracting a misaligned cross-video average <code>ms_x0</code> from <code>uncond_x0</code> collapsed earlier than CFG-Only.</div>
+      <video class="v" src="assets/p1-meanshift-v4-anchored-b300_iter_000400.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+
+    <div class="card warn">
+      <span class="tag warn">SHARP AT 100 → COLLAPSED BY 400 · ZERO FAKESCORE</span>
+      <div class="title">Ablation A: Decoupled DMD CFG-Only (iter 400 Final)</div>
+      <div class="metrics">fake_x0 = uncond_x0 (pure CFG engine, zero distribution matching) | Saturation = 0.501</div>
+      <div class="desc">Sharpest model at ~100 updates (see progression figure below), then progressively over-saturates and collapses into cyan/white stripes without a distribution-matching brake.</div>
+      <video class="v" src="assets/p1-cfg-only-b200_iter_000400.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+
+    <div class="card fail">
+      <span class="tag fail">COLLAPSED · ZERO FAKESCORE · N = 1 LIMIT</span>
+      <div class="title">Ablation B: SDS (N = 1 Degenerate Limit, iter 300)</div>
+      <div class="metrics">fake_x0 = detached student x0 (pure Teacher attraction, zero repulsion)</div>
+      <div class="desc">Blurs into grey frames by 50–100 updates and collapses into uniform brown frames by 300 updates.</div>
+      <video class="v" src="assets/p1-sds-n1-b200_iter_000300.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+  </div>
+
+  <h3>Earlier Checkpoints &amp; Diagnostic Mean-Shift Variants (Core v1 / v2 / v3 &amp; iter 100 Snapshot)</h3>
+  <div class="grid">
+    <div class="card">
+      <span class="tag info">ITER 500 (= 100 GEN) · BASELINE DMD</span>
+      <div class="title">DMD Baseline at 100 Gen Updates</div>
+      <div class="desc">Clean natural exposure and coherent layout at 100 generator updates.</div>
+      <video class="v" src="assets/p1-dmd-baseline-b300_iter_000500.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+    <div class="card warn">
+      <span class="tag warn">ITER 100 · PEAK SHARPNESS BEFORE COLLAPSE</span>
+      <div class="title">CFG-Only at 100 Gen Updates</div>
+      <div class="desc">Sharper than DMD at 100 updates, confirming Decoupled DMD's insight that CFG drives sharpness while FakeScore acts as the stabilizing brake.</div>
+      <video class="v" src="assets/p1-cfg-only-b200_iter_000100.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+    <div class="card fail">
+      <span class="tag fail">STOPPED @ 150 · RADIAL OVER-EXPOSURE</span>
+      <div class="title">Core v3: Decoupled CFG + Unanchored Mean-Shift (iter 150)</div>
+      <div class="desc"><code>ms_x0 − detached</code> pushes latents radially outward without a real-data anchor, causing high-contrast color-noise breakdown.</div>
+      <video class="v" src="assets/p1-meanshift-decoupled-n16-b300_iter_000150.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+    <div class="card fail">
+      <span class="tag fail">STOPPED @ 200 · SOLID MAGENTA/BLACK</span>
+      <div class="title">Core v2: SDS + Unanchored σ_t-Gated Mean-Shift (iter 200)</div>
+      <div class="desc">Collapsed to solid magenta/black frames by iter 200.</div>
+      <video class="v" src="assets/p1-meanshift-gated-n16-b200_iter_000200.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+  </div>
+
+  <h2>2. Visual Progression Audit (100 → 200 → 400 Generator Updates)</h2>
+  <img class="fig" src="assets/p1_final_3x3_audit.png" alt="Progression of DMD vs Core v4 vs CFG-Only across 100, 200, and 400 generator updates" />
+  <div class="cap">Mid-frame progression across 100 (top), 200 (middle), and 400 (bottom) generator updates. Left: Standard DMD (monotonically sharpens and remains natural). Middle: Core v4 Anchored Mean-Shift (over-exposes at 100, collapses into olive/pink camo blobs by 200–400). Right: CFG-Only (sharp at 100, oversaturated at 200, cyan-white stripes by 400).</div>
+
+  <h2>3. Step 1: No-Training ESS Diagnostic (N = 64 × 3 Prompts)</h2>
+  <img class="fig" src="assets/project1_ess.png" alt="Step 1 No-Training ESS Diagnostic across Raw Latent, Per-Token Latent, and Teacher Hidden States" />
+  <div class="cap">Effective Sample Size (ESS) and pairwise distance Coefficient of Variation CV(d) = std/mean measured over 192 81-frame 4-step Wan2.1-1.3B rollouts. Raw 2.1M-dim latents collapse completely at high noise (CV = 0.0006 at t = 0.9), whereas frozen Teacher L20 hidden states retain 470x stronger discrimination and healthy local repulsion (ESS = 48% at N = 16).</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Feature Space</th>
+        <th class="num">Dim D</th>
+        <th>CV(d) (t = 0.1 → 0.5 → 0.9)</th>
+        <th>Exact σ = t ESS_excl (N=64)</th>
+        <th>Norm Laplace ESS_excl (t=0.5, τ=0.05 / 0.2)</th>
+        <th>Verdict</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>(a) Raw Latent Global</td><td class="num">2,096,640</td><td>0.100 → 0.020 → 0.0006</td><td>1.00 (self_w = 1.000)</td><td>56.97 / 62.55 (uniform)</td><td>Ruled out</td></tr>
+      <tr><td>(b) Per-Token Latent (2×2)</td><td class="num">64</td><td>0.421 → 0.122 → 0.089</td><td>1.04 – 1.65</td><td>12.56 / 51.69</td><td>Degrades at high t</td></tr>
+      <tr><td><strong>(c1) Teacher L20 Global Pooled</strong></td><td class="num">1,536</td><td><strong>0.320 → 0.312 → 0.284</strong></td><td>—</td><td>4.05 / <strong>27.16 (43%)</strong></td><td><strong>Winner (470× CV)</strong></td></tr>
+      <tr><td><strong>(c2) Teacher L20 Per-Token</strong></td><td class="num">1,536</td><td><strong>0.203 → 0.126 → 0.108</strong></td><td>—</td><td><strong>17.35 (28%)</strong> / 54.71</td><td><strong>Winner (local)</strong></td></tr>
+    </tbody>
+  </table>
+
+  <h2>4. Zero-Training MC-FakeScore Diagnostic</h2>
+  <p>We further tested whether averaging <em>K</em> student continuations starting from the <em>exact same</em> noisy <code>x_t</code> (with fresh renoise) can approximate the trained DMD <code>D_fake</code>. Metric: <code>rel_dm = ||F − D_fake|| / ||D_fake − D_c||</code> (where <code>1.0</code> equals dropping the distribution-matching term entirely).</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Noise σ</th>
+        <th class="num">MC K=1</th>
+        <th class="num">MC K=16</th>
+        <th class="num">MC K→∞ (fit)</th>
+        <th class="num">SDS (x0)</th>
+        <th class="num">Student 1-step</th>
+        <th class="num">CFG-Only (uncond)</th>
+        <th class="num">Core v1 x0_ms</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>0.9375</td><td class="num">4.95</td><td class="num">3.21</td><td class="num">3.08</td><td class="num">3.53</td><td class="num">4.82</td><td class="num">1.02</td><td class="num">3.76</td></tr>
+      <tr><td>0.8333</td><td class="num">3.95</td><td class="num">2.93</td><td class="num">2.86</td><td class="num">2.87</td><td class="num">3.32</td><td class="num">0.99</td><td class="num">5.47</td></tr>
+      <tr><td>0.6250</td><td class="num">2.46</td><td class="num">—</td><td class="num">—</td><td class="num">2.33</td><td class="num">2.46</td><td class="num">0.99</td><td class="num">7.80</td></tr>
+    </tbody>
+  </table>
+
+  <h2>5. Next Step: Pivot to Symmetric Video Teacher-Feature Drifting (Video-TFD)</h2>
+  <div class="callout warn">
+    <strong>Why we pivot:</strong> Both our training failures (<code>Core v1–v4</code>) and the MC-FakeScore diagnostic establish that sample-based surrogates cannot be directly subtracted from DMD's posterior mean <code>D_real(x_t)</code>. A mathematically consistent FakeScore-free objective requires <strong>matching two symmetric objects</strong>: either posterior means at the same <code>x_t</code> (DMD) or <strong>samples vs. samples in feature space</strong> (Teacher-Feature Drifting, <code>arXiv:2605.07327</code>).
+  </div>
+  <p><strong>Proposed Phase-1 Validation (Video-TFD on Wan2.1-1.3B):</strong> (1) Evaluate our converged <code>DMD Baseline</code> on VBench + K=8 multi-seed DINOv3 diversity as the reference bar; (2) Build a reusable offline positive bank of <code>1,000</code> prompts × <code>4</code> videos generated by <code>Wan2.1-T2V-14B</code> (stored as compact bf16 latents); (3) Train a zero-FakeScore <code>Wan2.1-1.3B</code> student with symmetric multi-layer Drifting + Anchor-Margin coverage loss in frozen <code>Wan2.1-1.3B</code> Teacher hidden states (<code>σ = 0.1</code>, layers <code>L6, L12, L18, L24, L29</code>), where equilibrium <code>V = 0</code> holds identically at <code>q = p</code> without spatial-layout misalignment.</p>
+
+  <footer>
+    Wan2.1 Video Distillation Study · Open-Source Models &amp; Public Prompts Only · Static GitHub Pages Build
+  </footer>
+</div>
+<script>
+  const vids = Array.from(document.querySelectorAll('video.v'));
+  function syncAll(rate) {
+    vids.forEach(v => { v.currentTime = 0; v.playbackRate = rate; v.play().catch(() => {}); });
+  }
+  function toggleAll() {
+    if (!vids.length) return;
+    const paused = vids[0].paused;
+    vids.forEach(v => paused ? v.play().catch(() => {}) : v.pause());
+  }
+</script>
+</body>
+</html>
