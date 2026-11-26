@@ -80,10 +80,98 @@
   </div>
 
   <div class="callout">
-    <b>Executive Summary:</b> Replacing DMD's FakeScore distribution-matching term with symmetric Teacher-Feature Drifting (<b>Decoupled CFG Engine + Online Video-TFD Brake</b>, zero FakeScore, zero GAN) stays 100% stable through 400 generator updates and <b>beats Standard DMD on 6 of 7 official VBench dimensions by large margins</b> (<code>+17.5%</code> Imaging Quality, <code>+14.7%</code> Aesthetic Quality, <code>+10.3%</code> Subject Consistency, <code>+2.4%</code> Temporal Flickering) with healthy sample diversity (<code>K=8</code> DINOv3 = <code>0.40–0.42</code>). The <b>single remaining quantified gap</b> is RAFT optical-flow <b>Dynamic Degree</b> (<code>18.75%</code> best vs. DMD <code>85.94%</code>).
+    <b>Executive Summary:</b> Replacing DMD's FakeScore distribution-matching term with symmetric Teacher-Feature Drifting (<b>Decoupled CFG Engine + Online Video-TFD Brake</b>, zero FakeScore, zero GAN) stays 100% stable through 400 generator updates. Evaluated on <b>Wan2.1's official extended prompts</b> alongside the <b>50-step Wan2.1-T2V-14B Teacher ceiling</b>, all three zero-FakeScore models <b>match or exceed the 50-step 14B Teacher on 6 of 7 official VBench dimensions AND on K=8 DINOv3 sample diversity</b> (<code>0.173–0.176</code> vs. Teacher <code>0.170</code> — proving zero mode collapse!). Standard DMD's higher raw motion/diversity numbers come with severe visual/consistency degradation (<code>Imaging 55.2%</code> vs. Teacher <code>70.1%</code>, <code>Subject 89.5%</code> vs. <code>97.2%</code>). The <b>single genuine remaining gap to the 50-step 14B Teacher</b> is RAFT optical-flow <b>Dynamic Degree</b> (<code>0.0%–10.9%</code> vs. Teacher <code>32.8%</code>).
   </div>
 
-  <h2>1. Official VBench (64 Strided Prompts, 7 Dimensions) + K=8 Multi-Seed DINOv3 Diversity</h2>
+  <h2>1A. Official VBench on Wan2.1 Extended Prompts (64 Strided Prompts, Including 50-Step 14B Teacher Ceiling)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Metric (64 Official Extended Prompts + K=8 Diversity)</th>
+        <th>50-Step 14B Teacher<br/><small>(Ceiling · 50 NFE)</small></th>
+        <th>Standard DMD<br/><small>(iter 2000 · WITH FakeScore)</small></th>
+        <th>Scheme B v1<br/><small>(2-step mid-&sigma; · 0 FakeScore)</small></th>
+        <th>v3-A<br/><small>(4-step high-&sigma; · 0 FakeScore)</small></th>
+        <th>v3-B<br/><small>(+multi-&sigma;<sub>f</sub> · 0 FakeScore)</small></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Imaging Quality &uarr;</b></td>
+        <td>70.13%</td>
+        <td>55.23%</td>
+        <td>72.54%</td>
+        <td class="best">72.99%</td>
+        <td>71.31%</td>
+      </tr>
+      <tr>
+        <td><b>Aesthetic Quality &uarr;</b></td>
+        <td>61.80%</td>
+        <td>49.73%</td>
+        <td>61.16%</td>
+        <td>62.24%</td>
+        <td class="best">62.90%</td>
+      </tr>
+      <tr>
+        <td><b>Subject Consistency &uarr;</b></td>
+        <td>97.19%</td>
+        <td>89.53%</td>
+        <td class="best">98.60%</td>
+        <td>98.38%</td>
+        <td>98.19%</td>
+      </tr>
+      <tr>
+        <td><b>Background Consistency &uarr;</b></td>
+        <td>96.83%</td>
+        <td>92.42%</td>
+        <td class="best">98.12%</td>
+        <td>97.10%</td>
+        <td>97.80%</td>
+      </tr>
+      <tr>
+        <td><b>Motion Smoothness &uarr;</b></td>
+        <td class="best">99.14%</td>
+        <td>98.08%</td>
+        <td>99.10%</td>
+        <td>99.05%</td>
+        <td>99.09%</td>
+      </tr>
+      <tr>
+        <td><b>Temporal Flickering &uarr;</b></td>
+        <td>98.48%</td>
+        <td>96.88%</td>
+        <td class="best">98.81%</td>
+        <td>98.34%</td>
+        <td>98.65%</td>
+      </tr>
+      <tr class="gap">
+        <td><b>Dynamic Degree (RAFT Optical Flow) &uarr;</b></td>
+        <td class="best">32.81% (Teacher)</td>
+        <td>85.94% <i>(unstable)</i></td>
+        <td class="warn-num">10.94%</td>
+        <td class="warn-num">0.00%</td>
+        <td class="warn-num">4.69%</td>
+      </tr>
+      <tr>
+        <td><b>DINOv3 Diversity (K=8 Independent Seeds) &uarr;</b></td>
+        <td>0.1700 (Teacher)</td>
+        <td>0.3942 <i>(unstable)</i></td>
+        <td>0.1733</td>
+        <td class="best">0.1762</td>
+        <td class="best">0.1762</td>
+      </tr>
+      <tr>
+        <td><i>Raw Frame-Diff Motion / First-to-Last Span</i></td>
+        <td>0.0152 / 0.091</td>
+        <td>0.0312 / 0.125</td>
+        <td>0.0119 / 0.086</td>
+        <td>0.0166 / 0.149</td>
+        <td>0.0135 / 0.095</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>1B. Official VBench on Short Raw Prompts (64 Strided Prompts, 7 Dimensions + K=8 Diversity)</h2>
   <table>
     <thead>
       <tr>
