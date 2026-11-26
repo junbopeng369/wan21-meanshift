@@ -95,6 +95,49 @@
     (3) <strong>Root cause:</strong> <code>D_real(x_t)</code> is a spatially aligned posterior mean conditioned on <em>x<sub>t</sub></em>, while a cross-video batch average <code>x0_ms</code> mixes clean videos with different spatial layouts — so their difference does not vanish even when <em>q = p</em>. Next step: pivot to symmetric sample-vs-sample <strong>Video Teacher-Feature Drifting (Video-TFD)</strong>.
   </div>
 
+  <h2>Update: Scheme B (Decoupled CFG + Online Video-TFD, Zero FakeScore) Completed iter 400</h2>
+  <div class="callout">
+    <strong>Scheme B</strong> keeps Decoupled DMD's CFG engine and replaces the FakeScore distribution-matching term with an <strong>Online Video Teacher-Feature Drifting (TFD) brake</strong>: positives come from an online 2-step <code>Wan2.1-14B</code> CFG refinement of the student's own samples (no offline bank), and symmetric multi-layer Drifting runs in frozen <code>Wan2.1-1.3B</code> hidden states (L6, L12, L18, L24 at σ = 0.1). It is the <strong>first zero-FakeScore run in this study to stay stable and photorealistic through all 400 generator updates</strong>.
+  </div>
+
+  <div class="grid">
+    <div class="card pass">
+      <span class="tag pass">STABLE · ZERO FAKESCORE · 400 GEN UPDATES</span>
+      <div class="title">Scheme B: Decoupled CFG + Online Video-TFD Brake (iter 400)</div>
+      <div class="metrics">frame motion avg_diff = 0.0092 (EMA) / 0.0203 (non-EMA) vs DMD 0.0332</div>
+      <div class="desc">No cyan-white burn-in; single-frame quality matches or beats DMD at iter 2000 on all 4 prompts. Caveat: macro motion is about 3.6× lower than DMD.</div>
+      <video class="v" src="assets/schemeB_iter400.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+
+    <div class="card pass">
+      <span class="tag info">REFERENCE · 400 GEN UPDATES (ITER 2000)</span>
+      <div class="title">Baseline: Standard 4-Step DMD (with FakeScore)</div>
+      <div class="metrics">frame motion avg_diff = 0.0332</div>
+      <div class="desc">Sharp, natural, and the strongest motion of all runs.</div>
+      <video class="v" src="assets/p1-dmd-baseline-b300_iter_002000.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+
+    <div class="card warn">
+      <span class="tag warn">COLLAPSED BY 400 · ZERO FAKESCORE</span>
+      <div class="title">Ablation: Decoupled DMD CFG-Only (iter 400)</div>
+      <div class="metrics">CFG engine only, no distribution-matching brake</div>
+      <div class="desc">Burns into cyan-white stripes, showing what Scheme B's TFD brake prevents.</div>
+      <video class="v" src="assets/p1-cfg-only-b200_iter_000400.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+  </div>
+
+  <img class="fig" src="assets/schemeB_iter400_FINAL_compare.png" alt="Final frames at 400 generator updates: DMD baseline, CFG-Only, and Scheme B on 4 prompts">
+  <div class="cap">Final mid-frames at 400 generator updates on the 4 validation prompts. Top: DMD baseline. Middle: CFG-Only (collapsed). Bottom: Scheme B (stable and sharp).</div>
+
+  <img class="fig" src="assets/schemeB_iter400_FINAL_motion.png" alt="Frame strips comparing motion of Scheme B and DMD">
+  <div class="cap">Frame strips over time for two prompts. Scheme B (rows 1 and 3) is sharp but nearly static; DMD (rows 2 and 4) shows clear camera and subject motion.</div>
+
+  <h3>Four Takeaways</h3>
+  <p><strong>1. Stability and single-frame quality without FakeScore are solved by Scheme B.</strong> This confirms both geometric rules from the earlier diagnostics (frozen Teacher hidden-state kernels and symmetric sample-vs-sample Drifting) and the split of DMD into a CFG engine plus a distribution-matching brake.</p>
+  <p><strong>2. Pure coarse-pooled Drifting without the CFG engine (Scheme A) fails fast.</strong> It collapsed to solid yellow, orange, and green frames by iter 50, confirming that CFG provides the spatial anchoring.</p>
+  <p><strong>3. Scheme B's videos are nearly static because of where its positives come from.</strong> In Wan2.1 (shift = 5.0), macro camera and object motion is decided at high noise (σ ≈ 0.85–0.98). Scheme B refines its positives from mid-noise (s0 ∈ [0.45, 0.70]), so they inherit the student's low motion: the TFD brake controls color and saturation well but gives no gradient toward more motion, and per-frame pooling has no temporal-difference term.</p>
+  <p><strong>4. Next: Scheme B v2 is now running to close the motion gap.</strong> It keeps the CFG engine and TFD brake, but draws positives from real-data videos (unconditional TFD) or high-noise Teacher rollouts, and adds temporal-difference feature groups <code>h[:, t] − h[:, t−1]</code> to the Drifting loss.</p>
+
   <h2>1. Synchronized Video Comparison (400 Generator Updates, 4 Identical Prompts)</h2>
   <p>All models start from the identical Hybrid-Forcing <code>Wan2.1-1.3B</code> checkpoint, use the same frozen <code>Wan2.1-14B</code> Teacher (CFG = 3.0, LR = 2e-6), and are evaluated on the exact same 4 validation prompts (toy soldiers, keyboard, classroom students, woman on phone).</p>
 
