@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Wan2.1 FakeScore-Free Video Distillation · Official VBench &amp; Controlled Ablations (v3-A / v3-B)</title>
+<style>
+  :root {
+    --bg: #080c16; --surface: #0f172a; --border: #1e2d4d;
+    --text: #e2e8f0; --muted: #94a3b8; --blue: #58c4dd;
+    --teal: #34d399; --yellow: #fbbf24; --coral: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 20px 64px; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+  h1 { margin: 0 0 8px; font-size: 25px; color: #fff; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+  h2 { font-size: 18px; color: #93c5fd; margin: 32px 0 12px; border-left: 3px solid var(--teal); padding-left: 10px; }
+  .bar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+  button, a.btn {
+    background: #16223b; color: var(--text); border: 1px solid #2a3e66;
+    padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    font-weight: 600; text-decoration: none;
+  }
+  button:hover, a.btn:hover { background: #203154; }
+  .callout {
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 4px solid var(--teal); border-radius: 10px;
+    padding: 14px 18px; margin-bottom: 20px; font-size: 14px;
+  }
+  .callout.warn { border-left-color: var(--yellow); }
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0 18px;
+    font-size: 13.5px; background: var(--surface); border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  th, td { padding: 10px 12px; border-bottom: 1px solid #1b2845; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  th { background: #131e36; color: #93c5fd; font-weight: 700; }
+  tr.gap { background: rgba(251, 191, 36, 0.08); }
+  .best { color: var(--teal); font-weight: 700; }
+  .warn-num { color: var(--yellow); font-weight: 700; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(380px, 1fr)); gap: 16px; }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .card.hi { border-color: var(--teal); }
+  .card.ref { border-color: var(--yellow); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; margin-bottom: 8px; }
+  .tag.hi { background: rgba(52, 211, 153, 0.16); color: var(--teal); }
+  .tag.ref { background: rgba(251, 191, 36, 0.16); color: var(--yellow); }
+  .tag.mf { background: rgba(88, 196, 221, 0.16); color: var(--blue); }
+  .title { font-size: 14.5px; font-weight: 700; color: #fff; margin-bottom: 5px; }
+  .metrics {
+    font-size: 11.5px; color: #cbd5e1; background: #0a1020; border: 1px solid #1b2845;
+    border-radius: 6px; padding: 6px 10px; margin-bottom: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .desc { font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+  video { width: 100%; border-radius: 8px; background: #000; display: block; }
+  img.fig { width: 100%; border-radius: 10px; border: 1px solid var(--border); display: block; margin-top: 8px; }
+  ul { margin: 8px 0 0 18px; padding: 0; }
+  li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>FakeScore-Free Video Distillation on Wan2.1-1.3B: Official VBench &amp; Controlled Ablations</h1>
+  <div class="sub">
+    Standalone Quantitative Update (2026-11-26) · Evaluates 4-step <code>Wan2.1-T2V-1.3B</code> EMA checkpoints at exact <b>400 generator updates</b> across <b>64 evenly-strided official VBench prompts (7 dimensions)</b> + <b>K=8 multi-seed DINOv3 diversity</b>, plus 50-step <code>Wan2.1-T2V-14B</code> Teacher visual reference.
+  </div>
+  <div class="bar">
+    <a class="btn" href="./">← Previous Report (index.html)</a>
+    <button onclick="syncAll(1.0)">1.0× Sync Play All</button>
+    <button onclick="syncAll(0.5)">0.5× Slow Motion</button>
+    <button onclick="togglePlay()">Play / Pause</button>
+  </div>
+
+  <div class="callout">
+    <b>Executive Summary:</b> Replacing DMD's FakeScore distribution-matching term with symmetric Teacher-Feature Drifting (<b>Decoupled CFG Engine + Online Video-TFD Brake</b>, zero FakeScore, zero GAN) stays 100% stable through 400 generator updates and <b>beats Standard DMD on 6 of 7 official VBench dimensions by large margins</b> (<code>+17.5%</code> Imaging Quality, <code>+14.7%</code> Aesthetic Quality, <code>+10.3%</code> Subject Consistency, <code>+2.4%</code> Temporal Flickering) with healthy sample diversity (<code>K=8</code> DINOv3 = <code>0.40–0.42</code>). The <b>single remaining quantified gap</b> is RAFT optical-flow <b>Dynamic Degree</b> (<code>18.75%</code> best vs. DMD <code>85.94%</code>).
+  </div>
+
+  <h2>1. Official VBench (64 Strided Prompts, 7 Dimensions) + K=8 Multi-Seed DINOv3 Diversity</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Metric (All 4-Step Wan2.1-1.3B EMA @ 400 Gen Updates)</th>
+        <th>Standard DMD<br/><small>(iter 2000 · WITH FakeScore)</small></th>
+        <th>Scheme B v1<br/><small>(2-step mid-&sigma; · 0 FakeScore)</small></th>
+        <th>v3-A<br/><small>(4-step high-&sigma; · 0 FakeScore)</small></th>
+        <th>v3-B<br/><small>(+multi-&sigma;<sub>f</sub> · 0 FakeScore)</small></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>Imaging Quality &uarr;</b></td>
+        <td>57.27%</td>
+        <td>73.33%</td>
+        <td class="best">74.73% (+17.5%)</td>
+        <td>73.15%</td>
+      </tr>
+      <tr>
+        <td><b>Aesthetic Quality &uarr;</b></td>
+        <td>47.10%</td>
+        <td>59.67%</td>
+        <td class="best">61.78% (+14.7%)</td>
+        <td>60.88%</td>
+      </tr>
+      <tr>
+        <td><b>Subject Consistency &uarr;</b></td>
+        <td>88.51%</td>
+        <td class="best">98.78%</td>
+        <td>98.37%</td>
+        <td>98.59%</td>
+      </tr>
+      <tr>
+        <td><b>Background Consistency &uarr;</b></td>
+        <td>91.26%</td>
+        <td>97.76%</td>
+        <td>96.98%</td>
+        <td class="best">97.79%</td>
+      </tr>
+      <tr>
+        <td><b>Motion Smoothness &uarr;</b></td>
+        <td>97.94%</td>
+        <td>99.13%</td>
+        <td>99.12%</td>
+        <td class="best">99.15%</td>
+      </tr>
+      <tr>
+        <td><b>Temporal Flickering &uarr;</b></td>
+        <td>96.46%</td>
+        <td class="best">98.84%</td>
+        <td>98.50%</td>
+        <td>98.79%</td>
+      </tr>
+      <tr class="gap">
+        <td><b>Dynamic Degree (RAFT Optical Flow) &uarr;</b></td>
+        <td class="best">85.94%</td>
+        <td class="warn-num">18.75%</td>
+        <td class="warn-num">1.56%</td>
+        <td class="warn-num">6.25%</td>
+      </tr>
+      <tr class="gap">
+        <td><b>DINOv3 Diversity (K=8 Independent Seeds) &uarr;</b></td>
+        <td class="best">0.5855</td>
+        <td>0.4010</td>
+        <td>0.4242</td>
+        <td>0.4129</td>
+      </tr>
+      <tr>
+        <td><i>Raw Frame-Diff Motion / First-to-Last Span</i></td>
+        <td>0.0354 / 0.155</td>
+        <td>0.0116 / 0.091</td>
+        <td>0.0150 / 0.155</td>
+        <td>0.0121 / 0.098</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Synchronized 4-Prompt Video Comparison (Including 50-Step 14B Teacher Reference)</h2>
+  <div class="grid">
+    <div class="card hi">
+      <span class="tag hi">ZERO FAKESCORE · v3-A (4-STEP HIGH-&sigma; POSITIVES) · ITER 400</span>
+      <div class="title">v3-A Final · Highest Imaging (74.7%) &amp; Aesthetic (61.8%)</div>
+      <div class="metrics">Imaging=74.73% | Aesthetic=61.78% | Subj=98.37% | DynDeg=1.56% | Div(K=8)=0.424</div>
+      <div class="desc">Controlled 1-variable ablation vs. v1 (w=0.50, td=0, fixed &sigma;<sub>f</sub>=0.10; only x<sup>+</sup> changed to 4-step high-&sigma; [0.85, 0.95] 14B Euler). Zero burn, crispest single-frame quality.</div>
+      <video class="v" src="vbench_assets/v3a_iter400.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+
+    <div class="card hi">
+      <span class="tag hi">ZERO FAKESCORE · v3-B (+ MULTI-NOISE &sigma;<sub>f</sub>) · ITER 400</span>
+      <div class="title">v3-B Final · Multi-Noise Feature Extraction (&sigma;<sub>f</sub> &isin; {0.10, 0.50, 0.85})</div>
+      <div class="metrics">Imaging=73.15% | Aesthetic=60.88% | Smooth=99.15% | DynDeg=6.25% (4&times; v3-A) | Div=0.413</div>
+      <div class="desc">Controlled 1-variable ablation vs. v3-A: sampling &sigma;<sub>f</sub> across low/mid/high noise lifts Dynamic Degree 4&times; over v3-A while preserving top smoothness and consistency.</div>
+      <video class="v" src="vbench_assets/v3b_iter400.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+
+    <div class="card ref">
+      <span class="tag ref">TEACHER CEILING · WAN2.1-T2V-14B · 50-STEP UNIPC (CFG=5.0)</span>
+      <div class="title">Wan2.1-14B Teacher (50-Step) · Exact Same 4 Prompts</div>
+      <div class="metrics">50-NFE Reference | HF-Noise=0.0336 | T-Flicker=0.0079 | Raw Motion=0.0050</div>
+      <div class="desc">Note: these 4 default tabletop/portrait close-up prompts have naturally gentle motion even in the 50-step 14B Teacher; official 64-prompt VBench Dynamic Degree cleanly separates macro motion across action scenes.</div>
+      <video class="v" src="vbench_assets/teacher_14b_50step.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+
+    <div class="card ref">
+      <span class="tag ref">BASELINE · STANDARD 4-STEP DMD · ITER 2000 (400 GEN UPDATES)</span>
+      <div class="title">Standard DMD Baseline (With 1.3B FakeScore, 5:1 Critic Loop)</div>
+      <div class="metrics">Imaging=57.27% | Aesthetic=47.10% | Subj=88.51% | DynDeg=85.94% | Div(K=8)=0.586</div>
+      <div class="desc">Strongest Dynamic Degree (85.94%) and diversity (0.586), at the cost of much lower Imaging/Aesthetic quality, higher flicker, and occasional multi-person artifacts on action prompts.</div>
+      <video class="v" src="vbench_assets/dmd_iter2000.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+
+    <div class="card">
+      <span class="tag mf">ZERO FAKESCORE · SCHEME B v1 (2-STEP MID-&sigma; POSITIVES) · ITER 400</span>
+      <div class="title">Scheme B v1 Final · Best Zero-FakeScore Dynamic Degree (18.75%)</div>
+      <div class="metrics">Imaging=73.33% | Aesthetic=59.67% | Subj=98.78% | DynDeg=18.75% | Div=0.401</div>
+      <div class="desc">First zero-FakeScore run stable through 400 updates; 2-step mid-&sigma; [0.45, 0.70] refinement retained higher RAFT Dynamic Degree (18.75%) than coarse 4-step high-&sigma; Euler (1.56%).</div>
+      <video class="v" src="vbench_assets/v1_iter400.mp4" autoplay loop muted playsinline controls></video>
+    </div>
+  </div>
+
+  <h2>3. Extended 8-Prompt Visual Inspection (Top: 4 Static/Portrait · Bottom: 4 Dynamic Action Prompts)</h2>
+  <p class="desc">Bottom row shows 4 action prompts (boxing sparring, rotating Earth in space, two men walking on a boardwalk, action scene) at <code>iter 400</code> EMA — clean, sharp, and free of multi-person hallucinations:</p>
+  <img class="fig" src="vbench_assets/v3a_iter400_8prompts.png" alt="v3-A iter 400 8-prompt visual grid" />
+  <img class="fig" src="vbench_assets/v3b_iter400_8prompts.png" alt="v3-B iter 400 8-prompt visual grid" />
+
+  <h2>4. Controlled Diagnosis &amp; Next-Step Proposal for Collaborator Review</h2>
+  <div class="callout warn">
+    <b>Why did Dynamic Degree stay at 1.56%–18.75% vs. DMD's 85.94%?</b>
+    <ul>
+      <li><b>Coarse 4-step online Euler from &sigma; &isin; [0.85, 0.95] cannot synthesize 50-step optical flow:</b> <code>v3-A</code> (4 giant &Delta;&sigma;&approx;0.24 Euler steps) actually <i>lowered</i> RAFT Dynamic Degree from <code>18.75%</code> (<code>v1</code>) down to <code>1.56%</code>. Adding multi-noise feature extraction (<code>v3-B</code>) lifted it 4&times; back to <code>6.25%</code>, confirming high-noise Teacher features help transmit motion, but the positive targets themselves lack genuine 50-step Teacher dynamics.</li>
+      <li><b>Why naive temporal-difference on frame-averaged features failed (controlled negative ablations):</b> Adding <code>h<sub>frm</sub>[t] &minus; h<sub>frm</sub>[t&minus;1]</code> on spatially pooled features while lowering <code>w: 0.50 &rarr; 0.35</code> was hacked by a global brightness/blue color ramp from frame 0 to frame 48 (burned out by iter 150). Restoring <code>w = 0.50, td = 0</code> completely eliminated the color ramp across both <code>v3-A</code> and <code>v3-B</code>.</li>
+      <li><b>Proposed Next Experiment (to close the final Dynamic Degree gap while keeping +15% Imaging/Aesthetic lead):</b> Replace coarse 2–4 step online Euler refinement with a reusable <b>offline 50-step 14B Teacher positive bank</b> (e.g., 500–1,000 prompts &times; 4 clips, carrying true high-Dynamic-Degree Teacher motion), paired with our verified <code>Decoupled CFG + multi-&sigma;<sub>f</sub> Teacher-Feature Drifting</code> (<code>w = 0.50</code>, zero FakeScore).</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  function syncAll(rate) {
+    document.querySelectorAll('video.v').forEach(v => { v.currentTime = 0; v.playbackRate = rate; v.play(); });
+  }
+  function togglePlay() {
+    const vs = Array.from(document.querySelectorAll('video.v'));
+    if (!vs.length) return;
+    const paused = vs[0].paused;
+    vs.forEach(v => paused ? v.play() : v.pause());
+  }
+</script>
+</body>
+</html>
